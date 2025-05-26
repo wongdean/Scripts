@@ -39,6 +39,32 @@
         return match ? match[0] : null;
     }
 
+    // 提取当前页面的CA地址
+    function getCurrentCA() {
+        // 优先从URL路径中提取
+        const pathMatch = window.location.pathname.match(/\/token\/([A-Za-z0-9]{32,})/);
+        if (pathMatch) {
+            return pathMatch[1];
+        }
+        
+        // 从搜索链接中提取
+        const allSearchLinks = document.querySelectorAll('a[href*="x.com/search?q="]');
+        for (const link of allSearchLinks) {
+            const href = link.getAttribute('href');
+            if (href && href.includes('x.com/search?q=')) {
+                const urlParts = href.split('q=');
+                if (urlParts.length > 1) {
+                    const extracted = urlParts[1];
+                    if (extracted && extracted.length >= 32) {
+                        return extracted;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
     // 在GMGN页面添加跳转到Axiom的按钮
     function addAxiomButton() {
         // 检查是否已经添加过按钮
@@ -102,43 +128,9 @@
                 }
             }
 
-            // 提取CA地址
-            let ca = null;
-            const contextSearchLinks = outerDiv.querySelectorAll('a[href*="x.com/search?q="]');
-            
-            for (const link of contextSearchLinks) {
-                const href = link.getAttribute('href');
-                if (href && href.includes('x.com/search?q=')) {
-                    const urlParts = href.split('q=');
-                    if (urlParts.length > 1) {
-                        const extracted = urlParts[1];
-                        if (extracted && extracted.length >= 32) {
-                            ca = extracted;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // 如果在上下文中没找到，从整个页面查找
-            if (!ca) {
-                const allSearchLinks = document.querySelectorAll('a[href*="x.com/search?q="]');
-                for (const link of allSearchLinks) {
-                    const href = link.getAttribute('href');
-                    if (href && href.includes('x.com/search?q=')) {
-                        const urlParts = href.split('q=');
-                        if (urlParts.length > 1) {
-                            const extracted = urlParts[1];
-                            if (extracted && extracted.length >= 32) {
-                                ca = extracted;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!ca) {
+            // 验证当前页面有CA地址可提取
+            const currentCA = getCurrentCA();
+            if (!currentCA) {
                 continue;
             }
 
@@ -155,10 +147,15 @@
                 <span class="text-text-300 hover:text-text-100 transition-colors text-sm">Axiom</span>
             `;
 
-            // 添加点击事件
+            // 添加点击事件 - 每次点击时重新提取CA地址
             axiomButton.addEventListener('click', () => {
-                const axiomUrl = `https://axiom.trade/t/${ca}`;
-                window.open(axiomUrl, '_blank');
+                const ca = getCurrentCA();
+                if (ca) {
+                    const axiomUrl = `https://axiom.trade/t/${ca}`;
+                    window.open(axiomUrl, '_blank');
+                } else {
+                    console.warn('无法提取CA地址');
+                }
             });
 
             // 插入按钮
@@ -178,22 +175,9 @@
             return;
         }
 
-        // 从页面中提取CA地址
-        let ca = null;
-        const allSearchLinks = document.querySelectorAll('a[href*="x.com/search?q="]');
-        
-        for (const link of allSearchLinks) {
-            const href = link.getAttribute('href');
-            if (href && href.includes('x.com/search?q=')) {
-                const urlParts = href.split('q=');
-                if (urlParts.length > 1) {
-                    ca = urlParts[1];
-                    break;
-                }
-            }
-        }
-
-        if (!ca) {
+        // 验证当前页面有CA地址可提取
+        const currentCA = getCurrentCA();
+        if (!currentCA) {
             return;
         }
 
@@ -249,12 +233,17 @@
         gmgnLink.appendChild(gmgnIcon);
         gmgnLink.appendChild(gmgnText);
 
-        // 添加点击事件
+        // 添加点击事件 - 每次点击时重新提取CA地址
         gmgnLink.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const gmgnUrl = `https://gmgn.ai/sol/token/${ca}`;
-            window.open(gmgnUrl, '_blank');
+            const ca = getCurrentCA();
+            if (ca) {
+                const gmgnUrl = `https://gmgn.ai/sol/token/${ca}`;
+                window.open(gmgnUrl, '_blank');
+            } else {
+                console.warn('无法提取CA地址');
+            }
         });
 
         // 添加悬停效果
@@ -274,6 +263,19 @@
         }
     }
 
+    // 防抖函数
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
     // 主函数
     function init() {
         const currentDomain = window.location.hostname;
@@ -282,11 +284,16 @@
             addAxiomButton();
             
             // 监听页面变化（SPA应用）
-            const observer = new MutationObserver(() => {
-                if (!document.querySelector('#axiom-jump-btn')) {
-                    addAxiomButton();
+            const debouncedUpdate = debounce(() => {
+                // 移除旧按钮并重新添加，确保CA地址更新
+                const existingButton = document.querySelector('#axiom-jump-btn');
+                if (existingButton) {
+                    existingButton.remove();
                 }
-            });
+                addAxiomButton();
+            }, 200);
+            
+            const observer = new MutationObserver(debouncedUpdate);
             
             observer.observe(document.body, {
                 childList: true,
@@ -297,11 +304,16 @@
             addGMGNButton();
             
             // 监听页面变化（SPA应用）
-            const observer = new MutationObserver(() => {
-                if (!document.querySelector('#gmgn-jump-container')) {
-                    addGMGNButton();
+            const debouncedUpdate = debounce(() => {
+                // 移除旧按钮并重新添加，确保CA地址更新
+                const existingButton = document.querySelector('#gmgn-jump-container');
+                if (existingButton) {
+                    existingButton.remove();
                 }
-            });
+                addGMGNButton();
+            }, 200);
+            
+            const observer = new MutationObserver(debouncedUpdate);
             
             observer.observe(document.body, {
                 childList: true,
