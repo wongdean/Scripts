@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GMGN 搜索叙事
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  在GMGN页面添加搜索叙事功能，复制格式化内容到剪切板并跳转到Perplexity
 // @author       You
 // @match        https://gmgn.ai/*
@@ -46,8 +46,12 @@
                                   document.querySelector('.css-1g9j7u span.text-text-300');
             const fullName = fullNameElement ? fullNameElement.textContent.trim() : '';
 
-            // 提取链接信息
-            const linksContainer = document.querySelector('.flex-shrink-0[class*="css-"]') || 
+            // 提取链接信息 - 更新选择器以匹配新的HTML结构
+            // 尝试多种选择器来找到链接容器
+            const linksContainer = document.querySelector('div.flex.text-text-300.items-center.gap-\\[4px\\].flex-shrink-0') || 
+                                 document.querySelector('div.flex.text-text-300.items-center[class*="gap-"][class*="flex-shrink-0"]') ||
+                                 document.querySelector('.flex.text-text-300.items-center.flex-shrink-0') ||
+                                 document.querySelector('.flex-shrink-0[class*="css-"]') || 
                                  document.querySelector('div[class*="css-n6fhzv"]');
             let website = '';
             let twitter = '';
@@ -56,7 +60,7 @@
             if (linksContainer) {
                 // 网站链接 - 寻找globe图标或website标签
                 const websiteLink = linksContainer.querySelector('a[aria-label="website"]') ||
-                                  linksContainer.querySelector('a[href*="http"]:not([href*="twitter"]):not([href*="x.com"]):not([href*="pump.fun"]):not([href*="solscan"])');
+                                  linksContainer.querySelector('a[href*="http"]:not([href*="twitter"]):not([href*="x.com"]):not([href*="pump.fun"]):not([href*="solscan"]):not([href*="telegram"]):not([href*="t.me"])');
                 if (websiteLink) {
                     website = websiteLink.href;
                 }
@@ -72,6 +76,22 @@
                 const pumpfunLink = linksContainer.querySelector('a[href*="pump.fun"]');
                 if (pumpfunLink) {
                     pumpfun = pumpfunLink.href;
+                }
+            }
+
+            // 备用方案：如果上面没有找到，尝试从整个页面搜索
+            if (!website) {
+                const globalWebsiteLink = document.querySelector('a[aria-label="website"]');
+                if (globalWebsiteLink) {
+                    website = globalWebsiteLink.href;
+                }
+            }
+
+            if (!twitter) {
+                const globalTwitterLink = document.querySelector('a[aria-label="twitter"]') ||
+                                        document.querySelector('a[href*="twitter.com"], a[href*="x.com"]');
+                if (globalTwitterLink && !globalTwitterLink.href.includes('search')) {
+                    twitter = globalTwitterLink.href;
                 }
             }
 
@@ -252,7 +272,7 @@
         });
 
         button.innerHTML = `
-            <div class="flex gap-x-2px items-center text-[13px] leading-[16px] font-normal text-text-300 transition-colors hover:text-text-100">
+            <div class="flex gap-x-2px items-center text-[13px] leading-[16px] font-normal text-text-200 transition-colors hover:text-text-100">
                 <svg width="14" height="14" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="currentColor" size="14">
                     <g clip-path="url(#narrative-search-icon)">
                         <path d="M15.8783 16.145C16.1956 15.8277 16.7101 15.8277 17.0274 16.145L18.8844 18.002C19.2017 18.3193 19.2017 18.8337 18.8844 19.151 18.5671 19.4683 18.0526 19.4683 17.7353 19.151L15.8783 17.294C15.561 16.9767 15.561 16.4623 15.8783 16.145ZM9.11776 2.30273C5.31739 2.30273 2.23657 5.38355 2.23657 9.18393 2.23657 12.9843 5.31739 16.0651 9.11776 16.0651 12.9181 16.0651 15.999 12.9843 15.999 9.18393 15.999 5.38355 12.9181 2.30273 9.11776 2.30273ZM.611572 9.18393C.611572 4.48609 4.41992.677734 9.11776.677734 13.8156.677734 17.624 4.48609 17.624 9.18393 17.624 13.8818 13.8156 17.6901 9.11776 17.6901 4.41992 17.6901.611572 13.8818.611572 9.18393Z"></path>
